@@ -1,0 +1,40 @@
+# Save the output of this file and use kubectl create -f to import
+# it into Kubernetes.
+#
+# Created with podman-5.4.1
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    io.kubernetes.cri-o.SandboxID/jovialhawking: 93258c27af2ed94988a393754c3123bf2ff8cd34a70913c82e2b719d8d6cabb6
+    io.kubernetes.cri-o.SandboxID/nostalgicyonath: 93258c27af2ed94988a393754c3123bf2ff8cd34a70913c82e2b719d8d6cabb6
+  creationTimestamp: "2025-04-03T13:50:36Z"
+  labels:
+    app: thirstybabbage
+  name: thirstybabbage
+spec:
+  containers:
+  - args:
+    - app.py
+    image: localhost/flask_app:latest
+    name: nostalgicyonath
+    ports:
+    - containerPort: 8080
+      hostPort: 8080
+  - args:
+    - mysqld
+    env:
+    - name: MYSQL_ROOT_PASSWORD
+      value: contra
+    image: docker.io/library/mysql:latest
+    name: jovialhawking
+    securityContext:
+      privileged: true
+      procMount: Unmasked
+    volumeMounts:
+    - mountPath: /var/lib/mysql
+      name: mysqldata-pvc
+  volumes:
+  - name: mysqldata-pvc
+    persistentVolumeClaim:
+      claimName: mysqldata

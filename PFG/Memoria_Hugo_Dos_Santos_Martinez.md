@@ -14,7 +14,7 @@
   - [3.2 Planificación económica](#32-planificación-económica)  
 
 - [4. Desarrollo](#4-desarrollo)
-    - [Podman](#podman)  
+      
 
 
 - [5. Conclusiones finales](#5-conclusiones-finales)  
@@ -22,7 +22,7 @@
   - [5.2 Propuestas de mejora](#52-propuestas-de-mejora)  
 
 - [6. Guías](#6-guías)  
-  - [6.1 Guía de uso](#61-guía-de-uso)  
+  - [6.1 Guía de uso](#61-guía-de-uso)
   - [6.2 Guía de instalación](#62-guía-de-instalación)  
   
 - [7. Referencias bibliográficas](#7-referencias-bibliográficas)  
@@ -51,7 +51,341 @@
 
 Con las 3 aplicaciones ya instaladas empezaremos a desarrollar
 
+La app web lo haremos de **Python Flask** que es un framework de Python para crear aplicaciones web con un número de líneas de código reducido basado en WSGI
 
+```python
+# Importamos al .py el Flask, para las templates y el conector a la BBDD
+from flask import Flask, render_template, request
+import re
+import mysql.connector
+from mysql.connector import Error
+
+app = Flask(__name__)
+
+# Datos de configuración de la base de datos
+db_config = {
+    'host': 'localhost',  # Dirección
+    'user': 'root',            # Usuario
+    'password': '*******',            # Contraseña
+    'database': 'usuarios'     # Nombre de la base de datos
+}
+
+# Función para validar los datos del formulario
+def validate_form(email, username, password, phone):
+    email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    phone_regex = r'^\d{10}$'
+    if not re.match(email_regex, email):
+        return "Correo electrónico no válido."
+    if len(username) < 3:
+        return "El nombre de usuario debe tener al menos 3 caracteres."
+    if len(password) < 6:
+        return "La contraseña debe tener al menos 6 caracteres."
+    if not re.match(phone_regex, phone):
+        return "El número de teléfono debe tener 10 dígitos."
+    return None
+
+# Función para insertar los datos del formulario en la base de datos
+def insert_user(email, username, password, phone):
+    try:
+        # Conectar a la base de datos
+        connection = mysql.connector.connect(**db_config)
+        
+        if connection.is_connected():
+            cursor = connection.cursor()
+            # Consulta SQL para insertar el usuario
+            insert_query = """INSERT INTO usuarios (email, usuario, pwd, phone)
+                              VALUES (%s, %s, %s, %s)"""
+            # Ejecutar la consulta
+            cursor.execute(insert_query, (email, username, password, phone))
+            connection.commit()
+            cursor.close()
+            return None
+    except Error as e:
+        return f"Error al insertar datos: {e}"
+    finally:
+        if connection.is_connected():
+            connection.close()
+
+@app.route('/', methods=['GET', 'POST'])
+def home():
+    message = ""
+    
+    if request.method == 'POST':
+        email = request.form.get('email')
+        username = request.form.get('username')
+        password = request.form.get('password')
+        phone = request.form.get('phone')
+        
+        validation_error = validate_form(email, username, password, phone)
+        if validation_error:
+            message = validation_error
+        else:
+            insert_error = insert_user(email, username, password, phone)
+            if insert_error:
+                message = insert_error
+            else:
+                message = f"Registro exitoso para {username}!"
+    # Aquí renderiza el HTML
+    return render_template('index.html', message=message)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080)
+
+```
+
+Empezaremos con la parte de Podman y ahora explicaré unos conceptos
+
+**¿Qué es Podman?**
+
+Podman es un software de contenerización como Docker pero con la pequeña diferencia de que no te pide permisos de administrador y tampoco tiene un servicio en el sistema como si lo tiene docker (dockerd)
+
+**¿Que es un contendor?**
+
+Un contenedor es una versión light de una MV, mientras en la máquina virtual instalas todo un SO en el virtualizador y después las aplicaciones que necesites, en un contenedor solo instalarías el Kernel de Linux y la aplicación que necesites haciendo al contenedor portable, facil de arrancar y con mucho menos peso que una MV
+
+Para crear un contenedor tienes que partir de una imagen que es una plantilla la cual contiene las instrucciones necesarias para hacer un contenedor
+
+Lo que haremos será crear una pod con dos contenedores uno con la aplicación web de Python Flask y otro con la base de datos
+
+La de la aplicación web será creada con un Dockerfile personalizado a partir de una imagen de Python3.13 metido en un Alpine Linux
+
+La base de datos será una imagen de MySQL por defecto
+
+**¿Que es una pod o cápsula?**
+
+La pod es un grupo de uno o mas contenedores que comparten la misma red, PID y namespaces
+
+**¿Que es un Dockerfile o Containerfile?**
+
+Es un archivo que sirve como plantilla para crear una imagen
+
+Este es el dockerfile
+
+```dockerfile
+FROM python:3.13-alpine
+
+WORKDIR /app
+
+COPY . /app
+
+RUN apk update && apk upgrade
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip
+
+EXPOSE 8080
+
+ENTRYPOINT ["python"]
+CMD ["app.py"]
+```
+
+Vamos a explicar el dockerfile:
+
+- **FROM** dicta la imagen base sobre la que se va a construir tu imagen personalizada en este caso un Linux Alpine sobre el cual está instalado Python
+
+- **WORKDIR** crea un directorio si no existe y le hace un cd para entrar a el en este caso nos dirige a /app
+
+- **COPY {fuente} {destino}** copia todo lo que le digas hacia donde le digas, si pones . copiará todo lo que esté en la carpeta del dockerfile y sus hijos y con un archivo .dockerignore funciona como un .gitignore, solo pones el archivo que quieras que ignore en este caso copia todo lo que tenga en el directorio del Dockerfile a la carpeta /app
+
+- **RUN** Ejecuta un comando cuando se crea la imagen y se pasa a la shell del sistema (CMD, /bin/bash, /bin/sh) en este caso instala todas las dependencias de Python que hayamos puesto en el archivo requirements.txt, esto se hace porque así solo tendremos que añadir la dependencia al .txt y no habría que hacer nada mas y también actualizarán el Python
+
+```txt
+flask==3.1.0
+```
+
+- **ENTRYPOINT** Sirve para ejecutar un ejecutable en el contenedor cuando arranca, por ejemplo si quiero saber los servicios de windows que están corriendo puede servir en este caso te ejecuta Python
+
+```pwsh
+ENTRYPOINT [“Powershell”, “Get-Services”]
+```
+
+- **CMD** Pasa un argumento al comando del entrypoint, si pongo MYSQL me mostrará todos los servicios de MYSQL en este caso dentro de python me ejecuta la aplicación web
+
+```pwsh
+CMD [“MySQL”]
+```
+
+Para crear la imagen del Dockerfile es con el siguiente comando
+
+```pwsh
+PS D:\Projects> podman build -t flask_app .\PFG\
+STEP 1/9: FROM python:3.13-alpine
+STEP 2/9: WORKDIR /app
+--> Using cache 3a2563be92ac47103c1bf59d5e4d5c329a2ea33ac0b4f2e8dfe6f9e5564e2552 
+--> 3a2563be92ac
+STEP 3/9: COPY . /app
+--> a56b1e2e0ea1
+STEP 4/9: RUN apk update && apk upgrade
+fetch https://dl-cdn.alpinelinux.org/alpine/v3.21/main/x86_64/APKINDEX.tar.gz
+fetch https://dl-cdn.alpinelinux.org/alpine/v3.21/community/x86_64/APKINDEX.tar.gz
+v3.21.3-264-gb0ede8eacde [https://dl-cdn.alpinelinux.org/alpine/v3.21/main]
+v3.21.3-267-gb1b14b7bf27 [https://dl-cdn.alpinelinux.org/alpine/v3.21/community] 
+OK: 25398 distinct packages available
+(1/2) Upgrading libffi (3.4.6-r0 -> 3.4.7-r0)
+(2/2) Upgrading tzdata (2025a-r0 -> 2025b-r0)
+OK: 10 MiB in 28 packages
+--> d23610eda503
+STEP 5/9: RUN pip install --no-cache-dir -r requirements.txt
+Collecting flask==3.1.0 (from -r requirements.txt (line 1))
+  Downloading flask-3.1.0-py3-none-any.whl.metadata (2.7 kB)
+Collecting cryptography (from -r requirements.txt (line 2))
+  Downloading cryptography-44.0.2-cp39-abi3-musllinux_1_2_x86_64.whl.metadata (5.7 kB)
+Collecting mysql-connector-python (from -r requirements.txt (line 3))
+  Downloading mysql_connector_python-9.2.0-py2.py3-none-any.whl.metadata (6.0 kB)Collecting Werkzeug>=3.1 (from flask==3.1.0->-r requirements.txt (line 1))
+  Downloading werkzeug-3.1.3-py3-none-any.whl.metadata (3.7 kB)
+Collecting Jinja2>=3.1.2 (from flask==3.1.0->-r requirements.txt (line 1))
+  Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+Collecting itsdangerous>=2.2 (from flask==3.1.0->-r requirements.txt (line 1))
+  Downloading itsdangerous-2.2.0-py3-none-any.whl.metadata (1.9 kB)
+Collecting click>=8.1.3 (from flask==3.1.0->-r requirements.txt (line 1))
+  Downloading click-8.1.8-py3-none-any.whl.metadata (2.3 kB)
+Collecting blinker>=1.9 (from flask==3.1.0->-r requirements.txt (line 1))
+  Downloading blinker-1.9.0-py3-none-any.whl.metadata (1.6 kB)
+Collecting cffi>=1.12 (from cryptography->-r requirements.txt (line 2))
+  Downloading cffi-1.17.1-cp313-cp313-musllinux_1_1_x86_64.whl.metadata (1.5 kB)
+Collecting pycparser (from cffi>=1.12->cryptography->-r requirements.txt (line 2))
+  Downloading pycparser-2.22-py3-none-any.whl.metadata (943 bytes)
+Collecting MarkupSafe>=2.0 (from Jinja2>=3.1.2->flask==3.1.0->-r requirements.txt (line 1))
+  Downloading MarkupSafe-3.0.2-cp313-cp313-musllinux_1_2_x86_64.whl.metadata (4.0 kB)
+Downloading flask-3.1.0-py3-none-any.whl (102 kB)
+Downloading cryptography-44.0.2-cp39-abi3-musllinux_1_2_x86_64.whl (4.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.3/4.3 MB 67.0 MB/s eta 0:00:00
+Downloading mysql_connector_python-9.2.0-py2.py3-none-any.whl (398 kB)
+Downloading blinker-1.9.0-py3-none-any.whl (8.5 kB)
+Downloading cffi-1.17.1-cp313-cp313-musllinux_1_1_x86_64.whl (488 kB)
+Downloading click-8.1.8-py3-none-any.whl (98 kB)
+Downloading itsdangerous-2.2.0-py3-none-any.whl (16 kB)
+Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+Downloading werkzeug-3.1.3-py3-none-any.whl (224 kB)
+Downloading MarkupSafe-3.0.2-cp313-cp313-musllinux_1_2_x86_64.whl (23 kB)
+Downloading pycparser-2.22-py3-none-any.whl (117 kB)
+Installing collected packages: pycparser, mysql-connector-python, MarkupSafe, itsdangerous, click, blinker, Werkzeug, Jinja2, cffi, flask, cryptography
+Successfully installed Jinja2-3.1.6 MarkupSafe-3.0.2 Werkzeug-3.1.3 blinker-1.9.0 cffi-1.17.1 click-8.1.8 cryptography-44.0.2 flask-3.1.0 itsdangerous-2.2.0 mysql-connector-python-9.2.0 pycparser-2.22
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable.It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+
+[notice] A new release of pip is available: 24.3.1 -> 25.0.1
+[notice] To update, run: pip install --upgrade pip
+--> 683d5d11a78b
+STEP 6/9: RUN pip install --upgrade pip
+Requirement already satisfied: pip in /usr/local/lib/python3.13/site-packages (24.3.1)
+Collecting pip
+  Downloading pip-25.0.1-py3-none-any.whl.metadata (3.7 kB)
+Downloading pip-25.0.1-py3-none-any.whl (1.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 50.9 MB/s eta 0:00:00
+Installing collected packages: pip
+  Attempting uninstall: pip
+    Found existing installation: pip 24.3.1
+    Uninstalling pip-24.3.1:
+      Successfully uninstalled pip-24.3.1
+Successfully installed pip-25.0.1
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your systema.io/warnings/venv. Use the --root-user-action option if you know what you are do--> 55da837126e7
+STEP 7/9: EXPOSE 8080
+--> d36295992f34
+STEP 8/9: ENTRYPOINT ["python"]
+--> bdd93767efda
+STEP 9/9: CMD ["app.py"]
+COMMIT flask_app
+--> 18ee5d98cd04
+18ee5d98cd042fcc2a63d27a6873e106aeacd01309b06b49d807f21ecf46ee21
+```
+
+Parámetros:
+
+- -t le dará un nombre a la imagen
+
+Como puedes ver va paso a paso, esto te ayuda para que veas que comando falla
+
+Creamos la pod
+
+```pwsh
+PS D:\Projects> podman pod create -p 8080:8080
+b3474e41f547662191e7cc88215b609f7a5b4e09458c50add9e7f9deef4fb538
+PS D:\Projects> podman pod ps
+POD ID        NAME             STATUS      CREATED        INFRA ID      # OF CONTAINERS
+b3474e41f547  thirsty_babbage  Created     6 seconds ago  93258c27af2e  1
+PS D:\Projects> podman pod start thirsty_babbage
+thirsty_babbage
+PS D:\Projects> podman pod ps
+POD ID        NAME             STATUS      CREATED             INFRA ID      # OF CONTAINERS
+b3474e41f547  thirsty_babbage  Running     About a minute ago  93258c27af2e  1
+PS D:\Projects>
+```
+
+Lo que he hecho ha sido crearla mapeando el puerto 8080 y arrancarla
+
+```pwsh
+PS D:\Projects> podman run -d --pod thirsty_babbage localhost/flask_app
+39c362a105e71de8282cce665fd783af3a4189046d99a21d9d8d68515d0c62b5
+PS D:\Projects>
+```
+
+Parámetros:
+
+- -d sirve para que no te agarre la shell desde donde lo has ejecutado
+
+- --pod para meterlo en la pod que indicas
+
+Para el contenedor de MYSQL usaremos la imagen base de MySQL:latest
+
+Si queremos data consistente tenemos que crear un volumen
+
+```pwsh
+PS D:\Projects> podman volumen create mysqldata
+mysqldata
+PS D:\Projects>
+```
+
+Y al crear el siguiente contenedor le decimos que los datos los guarde en el volumen, esta imagen de MySQL es de docker.io/library/mysql
+
+```pwsh
+PS D:\Projects> podman run -d -v mysqldata:/var/lib/mysql mysql:latest
+```
+
+Parámetros:
+
+-d para que no te agarre la shell
+
+-v para meter los datos en el volumen
+
+Si quieres ver como funciona solo tendrán ir a tu navegador en localhost:8080
+
+Cuando metas datos en el formulario, si son correctos lo puedes ver en la BBDD
+
+```pwsh
+PS D:\Projects> podman exec -it 40da mysql -u root -p
+Enter password: 
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 13
+Server version: 9.2.0 MySQL Community Server - GPL
+
+Copyright (c) 2000, 2025, Oracle and/or its affiliates.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql>
+```
+
+```mysql
+mysql> SELECT * FROM usuarios
+    -> ;
++----+---------+-----------+----------+------------+
+| id | email   | usuario   | pwd      | phone      |
++----+---------+-----------+----------+------------+
+|  1 | a@a.com | prueba123 | 13214123 | 3645645212 |
+|  2 | a@a.com | {{7*7}}   | 1415414  | 3645645212 |
++----+---------+-----------+----------+------------+
+2 rows in set (0.00 sec)
+```
+
+Y generamos un archivo .YAML para kubernetes de la pod
+
+```pwsh
+PS D:\Projects> podman generate kube -f flaskapp_bbdd.yaml thirsty_babbage
+PS D:\Projects>
+```
 
 # 5. Conclusiones finales
 
@@ -62,238 +396,6 @@ Con las 3 aplicaciones ya instaladas empezaremos a desarrollar
 # 6. Guías
 
 ## 6.1 Guía de uso
-
-## Podman
-
-Si quieres iniciar podman tendrás que escribir los 2 siguientes comandos en tu cmd
-
-**podman machine init**
-**podman machine start**
-
-La salida tendría que ser algo parecida a esto
-
-```batch
-C:\Users\Duke>podman machine init
-Looking up Podman Machine image at quay.io/podman/machine-os-wsl:5.4 to create VM
-Getting image source signatures
-Copying blob 84c333c351e9 done   |
-Copying config 44136fa355 done   |
-Writing manifest to image destination
-84c333c351e97943d8bcea7229680735577d544076574a2726cbb7e4539c898b
-Extracting compressed file: podman-machine-default-amd64: done
-Importing operating system into WSL (this may take a few minutes on a new WSL install)...
-La operación se completó correctamente.
-Configuring system...
-Machine init complete
-To start your machine run:
-
-        podman machine start
-C:\Users\Duke>podman machine start
-Starting machine "podman-machine-default"
-
-This machine is currently configured in rootless mode. If your containers
-require root permissions (e.g. ports < 1024), or if you run into compatibility
-issues with non-podman clients, you can switch using the following command:
-
-        podman machine set --rootful
-
-API forwarding listening on: npipe:////./pipe/docker_engine
-
-Docker API clients default to this address. You do not need to set DOCKER_HOST.
-Machine "podman-machine-default" started successfully
-```
-
-Para que Podman consiga las imágenes de los contenedores trabaja con registros que son unos repositorios donde están todas las imágenes predefinidas
-
-Por defecto te viene el registro de Docker Hub, Red Hat, GitHub y el de Google aunque también puedes quitar o añadir otro registro, incluso algún registro privado que tengas
-
-Si deseas buscar una imagen con un servicio que quieras con el comando **podman search 'nombre de contendor'** te buscará en todos los registros una imagen con ese servicio
-
-```batch
-PS D:\Clase\ASO> podman search nginx
-NAME                                              DESCRIPTION
-docker.io/library/nginx                           Official build of Nginx.
-docker.io/nginx/nginx-ingress                     NGINX and  NGINX Plus Ingress Controllers fo...
-docker.io/nginx/nginx-prometheus-exporter         NGINX Prometheus Exporter for NGINX and NGIN...
-docker.io/nginx/unit                              This repository is retired, use the Docker o...
-docker.io/nginx/nginx-ingress-operator            NGINX Ingress Operator for NGINX and NGINX P...
-docker.io/nginx/nginx-quic-qns                    NGINX QUIC interop
-docker.io/nginx/nginxaas-loadbalancer-kubernetes
-docker.io/nginx/unit-preview                      Unit preview features
-docker.io/bitnami/nginx                           Bitnami container image for NGINX
-docker.io/ubuntu/nginx                            Nginx, a high-performance reverse proxy & we...
-docker.io/bitnamicharts/nginx                     Bitnami Helm chart for NGINX Open Source
-docker.io/rancher/nginx
-docker.io/kasmweb/nginx                           An Nginx image based off nginx:alpine and in...
-docker.io/linuxserver/nginx                       An Nginx container, brought to you by LinuxS...
-docker.io/redash/nginx                            Pre-configured nginx to proxy linked contain...
-docker.io/dtagdevsec/nginx                        T-Pot Nginx
-docker.io/vmware/nginx
-docker.io/paketobuildpacks/nginx
-docker.io/chainguard/nginx                        Build, ship and run secure software with Cha...
-docker.io/gluufederation/nginx                    A customized NGINX image containing a consu...
-docker.io/intel/nginx
-docker.io/droidwiki/nginx
-docker.io/circleci/nginx                          This image is for internal use
-docker.io/corpusops/nginx                         https://github.com/corpusops/docker-images/
-docker.io/antrea/nginx
-```
-
-Una vez que ya tengamos la imagen deseada vamos a descargarla con **podman pull**, yo usaré la docker.io/library/nginx
-
-```batch
-PS D:\Clase\ASO> podman pull docker.io/library/nginx
-Trying to pull docker.io/library/nginx:latest...
-Getting image source signatures
-Copying blob sha256:97f5c0f51d43d499970597eef919f9170954289eff0c5d7b8f8afd73dbb57977
-Copying blob sha256:417c4bccf5349be7cd4ba91b1a2077ecf0ab50b3831bb071ba31f2c8bac02ed1
-Copying blob sha256:6e909acdb790c5a1989d9cfc795fda5a246ad6664bb27b5c688e2b734b2c5fad
-Copying blob sha256:5eaa34f5b9c2a13ef2217ceb966953dfd5c3a21a990767da307be1f57e5a1e4f
-Copying blob sha256:373fe654e9845b69587105e1b82833209521db456bdc5bc26ac7260e3eb2dd52
-Copying blob sha256:e7e0ca015e553ccff5686ec2153c895313675686d3f6940144ce935c07554d85
-Copying blob sha256:c22eb46e871ad1cda19691450312c6b5c25eb5e6836773821d8091cffb6327cc
-Copying config sha256:53a18edff8091d5faff1e42b4d885bc5f0f897873b0b8f0ace236cd5930819b0
-Writing manifest to image destination
-53a18edff8091d5faff1e42b4d885bc5f0f897873b0b8f0ace236cd5930819b0
-PS D:\Clase\ASO>
-```
-
-Con **podman image list** podremos ver todas las imagenes que tengamos descargadas
-
-```batch
-PS D:\Clase\ASO\Proyectos\ProyectoFinGrado> podman image list
-REPOSITORY               TAG         IMAGE ID      CREATED      SIZE
-docker.io/library/nginx  latest      53a18edff809  6 weeks ago  196 MB
-PS D:\Clase\ASO\Proyectos\ProyectoFinGrado>
-```
-
-Para arrancar el contenedor usaremos **podman run "contenedor"** y usaremos algunos parámetros:
-
-- El parámetro --name que le dará un nombre al contenedor
-- El parámetro -d que hará que el proceso no agarre nuestro shell
-- El parámetro --rm que no borrará el contenedor cuando lo cerremos para no llenar el sistema de archivos
-- El parámetro -p que nos permitirá mapear puertos
-
-```batch
-C:\Users\Duke>podman run --name nginx -d --rm -p 8080:80 nginx
-208c2abaf060a96970c9ef001ee435fa242e0b4fb22bbe665ebdf2d8082f32b6
-
-C:\Users\Duke>
-```
-De salida te da el id del contenedor
-
-**podman ps -a** nos servirá para ver los contenedores incluso aquellos que estén parados
-
-```batch
-C:\Users\Duke>podman ps -a
-CONTAINER ID  IMAGE                           COMMAND               CREATED         STATUS         PORTS                 NAMES
-208c2abaf060  docker.io/library/nginx:latest  nginx -g daemon o...  12 seconds ago  Up 12 seconds  0.0.0.0:8080->80/tcp  nginx
-```
-También podrás ver cosas como:
-
-- El ID del contenedor
-- De donde sale la imagen
-- Comando que se ha ejecutado
-- Cuándo se creó
-- Cuánto tiempo llevan encendido
-- Puertos que usa
-- Nombre del contenedor
-
-En caso de no poner el parámetro --rm a la hora de iniciar el contenedor si está parado tendrás que iniciarlo con **podman start "id o nombre de contenedor"** para pararlo es con **podman stop "id o nombre de contenedor"**
-
-Si quieres ver información detallada del contenedor en formato JSON es con **podman inspect "id o nombre de contenedor"**
-
-Y para ver el puerto que tiene abierto la máquina es con **podman port "id o nombre de contenedor"**
-
-```batch
-C:\Users\Duke>podman port nginx
-80/tcp -> 0.0.0.0:8080
-```
-
-Ahora que ya hemos aprendido como hacer un contenedor empezaremos con las **Cápsulas** o **Pods**
-
-¿Que son las Pods?
-
-Es un grupo de uno o mas contenedores que comparten la misma red e id de procesos
-
-Para ver la ayuda **podman pod --help**
-
-La creamos con **podman pod create**
-
-```pwsh
-PS C:\Users\Duke> podman pod create
-4ae37935941d44012605294e403f094595c73bd6f384927061bb10af6fe73019
-PS C:\Users\Duke>
-```
-Para ver la pod creada con **podman pod ls**
-
-```pwsh
-PS C:\Users\Duke> podman pod ls
-POD ID        NAME               STATUS      CREATED         INFRA ID      # OF CONTAINERS
-4ae37935941d  gallant_mendeleev  Created     53 seconds ago  2d6ff7f2e1f8  1
-PS C:\Users\Duke>
-```
-Ese contenedor que ya está en la Pod permite a Podman conectar todos los contenedores entre sí y permite parar y arranca contenedores que estén dentro de la Pod sin que la Pod deje de funcionar, ese contenedor tiene una imagen default que no se cambia a no ser q se especifique
-
-Con el comando **podman pod -a --pod** podremos ver todos los contenedores
-
-```pwsh
-PS C:\Users\Duke> podman ps -a --pod
-CONTAINER ID  IMAGE                                    COMMAND               CREATED        STATUS                    PORTS                 NAMES               POD ID        PODNAME
-f03d383c2c79  docker.io/library/nginx:latest           nginx -g daemon o...  22 hours ago   Exited (0) 292 years ago  0.0.0.0:8080->80/tcp  nginx
-2d6ff7f2e1f8  localhost/podman-pause:5.4.1-1741651200                        6 minutes ago  Created                                         4ae37935941d-infra  4ae37935941d  gallant_mendeleev
-PS C:\Users\Duke>
-```
-Se puede ver al final el POD ID y la PODNAME
-
-Ahora añadiremos contenedores a la Pod con **podman run -dt --pod gallant_mendeleev nginx** es importante que el contenedor esté parado
-
-```pwsh
-PS C:\Users\Duke> podman run -dt --pod gallant_mendeleev nginx  
-6de0504781996c99d33076d8de466394a949222656e1593be4c00c6471d732ec
-PS C:\Users\Duke> podman ps -a --pod
-CONTAINER ID  IMAGE                                    COMMAND               CREATED         STATUS                    PORTS 
-                NAMES                POD ID        PODNAME
-f03d383c2c79  docker.io/library/nginx:latest           nginx -g daemon o...  22 hours ago    Exited (0) 292 years ago  0.0.0.0:8080->80/tcp  nginx
-2d6ff7f2e1f8  localhost/podman-pause:5.4.1-1741651200                        19 minutes ago  Up 7 seconds
-                4ae37935941d-infra   4ae37935941d  gallant_mendeleev
-6de050478199  docker.io/library/nginx:latest           nginx -g daemon o...  6 seconds ago   Up 7 seconds              80/tcp                quizzical_sanderson  4ae37935941d  gallant_mendeleev
-PS C:\Users\Duke
-```
-Como hemos usado podman run en base a la imagen de nginx me creará otro contenedor y el que tenía antes no se ha borrado, lo borraré con **podman rm nginx**
-
-Aunque el contenedor esté en una Pod todos los comandos anteriormente mencionados seguirán funcionando
-
-Con **podman pod ls** listaremos todas las pods
-
-```pwsh
-PS C:\Users\Duke> podman pod ls
-POD ID        NAME               STATUS      CREATED         INFRA ID      # OF CONTAINERS
-4ae37935941d  gallant_mendeleev  Running     26 minutes ago  2d6ff7f2e1f8  2
-PS C:\Users\Duke>
-```
-Para parar la pod podrás usar **podman pod stop gallant_mendeleev**, para arrancarla de nuevo **podman pod start gallant_mendeleev** y para borrarla servirá con **podman pod rm gallant_mendeleev**
-
-```pwsh
-PS C:\Users\Duke> podman pod stop gallant_mendeleev
-gallant_mendeleev
-PS C:\Users\Duke> podman pod start gallant_mendeleev
-gallant_mendeleev
-PS C:\Users\Duke> podman pod rm --force gallant_mendeleev
-4ae37935941d44012605294e403f094595c73bd6f384927061bb10af6fe73019
-PS C:\Users\Duke> podman pod ls
-POD ID      NAME        STATUS      CREATED     INFRA ID    # OF CONTAINERS
-PS C:\Users\Duke
-```
-Los comándos básicos de contenedores funciona con las pods añadiendo simplemente un pod entre podman y el comando
-
-Ahora aprenderemos a generar un archivo Kubernetes YAML que contiene información de como se ejecuta la Pod de la cual se haya creado el archivo .YAML
-
-```pwsh
-PS C:\Users\Duke> podman generate kube vigilant_fermat >> D:\Clase\ASO\Proyectos\ProyectoFinGrado\prueba.yaml
-PS C:\Users\Duke>
-```
-Una vez teniendo el archivo si usamos el comando **podman play kube D:\Clase\ASO\Proyectos\ProyectoFinGrado\prueba.yaml** nos creará un pod con exactamente la misma configuración y contenedores que tenemos en el .YAML
 
 ## 6.2 Guía de instalación
 
@@ -309,12 +411,48 @@ Cuando ejecutemos el .exe nos dará la opción de descargar 3 dependencias e ins
 
 Te pedirá que instales WSL o Windows HyperV, el motivo de esto es que para crear un contenedor de Linux el sistema de contenerización necesita acceso al Kernel de Linux y lo que hace el WSL es justamente instalarte un Kernel de Linux
 
-Ahora con Kubernetes solo tendremos que hacer un Curl
+Ahora instalaremos Kubernetes que serán 2 componentes: Minikube para hacer pruebas y Kubectl para la command line tool
 
-```batch
+Para kubectl nos dirigimos a (Kubernetes)[kubernetes.io] en el apartado de documentación a la derecha Tasks -> Install tools y ejecutamos el siguiente comando
+
+```pwsh
 curl.exe -LO "https://dl.k8s.io/release/v1.32.0/bin/windows/amd64/kubectl.exe"
 ```
 
+El .exe que se nos ha descargado lo movemos a una carpeta en C: llamada kube
 
+En Panel de Control -> Sistema y Seguridad -> Sistema -> Configuración avanzada de Sistema -> Variables de entorno -> Path -> Añades la ruta del .exe de kube que en mi caso es C:\kube
 
-# 7. Referencias bibliográficas ø
+Y ahora instalaremos minikube con 2 comandos en Powershell
+
+Este para descargarlo:
+
+```pwsh
+New-Item -Path 'c:\' -Name 'minikube' -ItemType Directory -Force
+Invoke-WebRequest -OutFile 'c:\minikube\minikube.exe' -Uri 'https://github.com/kubernetes/minikube/releases/latest/download/minikube-windows-amd64.exe' -UseBasicParsing
+```
+
+Y este para añadir el binario al PATH del sistema
+
+```pwsh
+$oldPath = [Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine)
+if ($oldPath.Split(';') -inotcontains 'C:\minikube'){
+  [Environment]::SetEnvironmentVariable('Path', $('{0};C:\minikube' -f $oldPath), [EnvironmentVariableTarget]::Machine)
+}
+```
+
+Además tendremos que usar Hyper-V que es el hipervisor que mejor funciona con Kubernetes
+
+```pwsh
+Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All
+```
+
+# 7. Referencias bibliográficas
+
+(Curso Podman)[https://www.youtube.com/watch?v=YXfA5O5Mr18]
+
+(Instalación Kubernetes)[https://core.digit.org/guides/operations-guide/working-with-kubernetes/installation-of-kubectl]
+
+(Documentación Python Flask)[https://flask.palletsprojects.com/en/stable/]
+
+(Documentación Dockerfile)[https://docs.docker.com/reference/dockerfile/]
