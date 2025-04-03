@@ -348,8 +348,6 @@ Parámetros:
 
 Si quieres ver como funciona solo tendrán ir a tu navegador en localhost:8080
 
-Cuando metas datos en el formulario, si son correctos lo puedes ver en la BBDD
-
 ```pwsh
 PS D:\Projects> podman exec -it 40da mysql -u root -p
 Enter password: 
@@ -367,6 +365,29 @@ Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
 
 mysql>
 ```
+
+Creamos la BBDD y la tabla usuarios con los campos del formulario además de un campo ID que será la PK y será autoincremental
+
+```mysql
+mysql> CREATE DATABASE usuarios;
+Query OK, 0 rows affected, 1 warning (0.01 sec)
+mysql> USE usuarios;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql> CREATE TABLE usuarios (
+  >> id INT AUTO_INCREMENT PRIMARY KEY,
+  >> email VARCHAR(60),
+  >> usuario VARCHAR(20),
+  >> pwd VARCHAR(60),
+  >> phone INT
+  >> );
+  Query OK, 0 rows affected (0.02 sec)
+mysql>
+```
+
+Cuando metas datos en el formulario, si son correctos lo puedes ver en la BBDD
 
 ```mysql
 mysql> SELECT * FROM usuarios
