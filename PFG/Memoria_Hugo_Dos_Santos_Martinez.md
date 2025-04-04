@@ -14,6 +14,7 @@
   - [3.2 Planificación económica](#32-planificación-económica)  
 
 - [4. Desarrollo](#4-desarrollo)
+  - [Explicación de conceptos](#explicación-de-conceptos)
       
 
 
@@ -48,6 +49,56 @@
 ## 3.2 Planificación económica
 
 # 4. Desarrollo
+
+## Explicación de conceptos
+
+**¿Qué es Podman?**
+
+Podman es una herramienta nativa de Linux sin servicios, de código abierto diseñada para encontrar, construir, compartir y lanzar aplicaciones usando contenedores e imágenes de contenedores
+
+Podman te da una CLI similar a la de otras herramientas de contenerización como docker
+
+Podman usa un runtime que sigue el estandar OCI (Open Container Iniciative) para gestionar y crear los contenedores en vez de un demonio central
+
+Los contenedores de podman pueden ser arrancados con o sin privilegios además de que maneja el ecosistema entero de contenedores:
+
+- Pods
+
+- Contenedores
+
+- Imágenes de contenedores
+
+- Volúmenes de contenedores
+
+Te permite crear, arrancar y mantener los contenedores y sus imágenes en un entorno de producción
+
+**¿Que es un contendor?**
+
+Es una unidad ligera, portable y auto-suficiente que une una aplicación con sus dependencias, librerías y entorno de ejecución para asegurarnos que la aplicación se ejecuta correctamente a lo largo de diferentes entornos
+
+Aisla las aplicaciones del sistema manteniendo su propio sistema de archivos mientras usan el kernel del host lo cual contribuye a su  eficiencia y facilidad de uso
+
+A diferencia de las máquinas virtuales que ocupan una cantidad de espacion considerable, llegado a ocupar varios GB de espacio los contenedores pueden manejar mas aplicaciones ocupado muchísimo menos
+
+Esto lo hace eficiente para desarrollo o pruebas
+
+Para crear un contenedor tienes que partir de una imagen que es una plantilla la cual contiene las instrucciones o aplicaciones necesarias para hacer un contenedor
+
+Lo que yo haré para este proyecta será crear una pod con dos contenedores uno con la aplicación web de Python Flask y otro con la base de datos
+
+Una vez creados conectarlos y que la app de python le envíe los datos a la BBDD
+
+La de la aplicación web será creada con un Dockerfile personalizado a partir de una imagen de Python3.13 metido en un Alpine Linux
+
+La base de datos será una imagen de MySQL por defecto
+
+**¿Que es una pod o cápsula?**
+
+La pod es un grupo de uno o mas contenedores que comparten recursos y pueden comunicarse entre sí a través de Localhost, agrupand los contenedores en un namespace de Linux que comparten recursos específicos permitiéndome fusionar variedad de aplicaciones y son gestionadas a través de la CLI
+
+**¿Que es un Dockerfile o Containerfile?**
+
+Es un archivo que sirve como una plantilla con una serie de instrucciones que se ejecutan de manera consecutiva para crear una imagen con la cual luego podremos construir un contenedor
 
 Con las 3 aplicaciones ya instaladas empezaremos a desarrollar
 
@@ -133,33 +184,9 @@ if __name__ == '__main__':
 
 ```
 
-Empezaremos con la parte de Podman y ahora explicaré unos conceptos
+Empezaremos con la parte de Podman
 
-**¿Qué es Podman?**
-
-Podman es un software de contenerización como Docker pero con la pequeña diferencia de que no te pide permisos de administrador y tampoco tiene un servicio en el sistema como si lo tiene docker (dockerd)
-
-**¿Que es un contendor?**
-
-Un contenedor es una versión light de una MV, mientras en la máquina virtual instalas todo un SO en el virtualizador y después las aplicaciones que necesites, en un contenedor solo instalarías el Kernel de Linux y la aplicación que necesites haciendo al contenedor portable, facil de arrancar y con mucho menos peso que una MV
-
-Para crear un contenedor tienes que partir de una imagen que es una plantilla la cual contiene las instrucciones necesarias para hacer un contenedor
-
-Lo que haremos será crear una pod con dos contenedores uno con la aplicación web de Python Flask y otro con la base de datos
-
-La de la aplicación web será creada con un Dockerfile personalizado a partir de una imagen de Python3.13 metido en un Alpine Linux
-
-La base de datos será una imagen de MySQL por defecto
-
-**¿Que es una pod o cápsula?**
-
-La pod es un grupo de uno o mas contenedores que comparten la misma red, PID y namespaces
-
-**¿Que es un Dockerfile o Containerfile?**
-
-Es un archivo que sirve como plantilla para crear una imagen
-
-Este es el dockerfile
+Este es el dockerfile de la app de python flask
 
 ```dockerfile
 FROM python:3.13-alpine
@@ -194,13 +221,13 @@ flask==3.1.0
 
 - **ENTRYPOINT** Sirve para ejecutar un ejecutable en el contenedor cuando arranca, por ejemplo si quiero saber los servicios de windows que están corriendo puede servir en este caso te ejecuta Python
 
-```pwsh
+```Dockerfile
 ENTRYPOINT [“Powershell”, “Get-Services”]
 ```
 
 - **CMD** Pasa un argumento al comando del entrypoint, si pongo MYSQL me mostrará todos los servicios de MYSQL en este caso dentro de python me ejecuta la aplicación web
 
-```pwsh
+```Dockerfile
 CMD [“MySQL”]
 ```
 
@@ -337,7 +364,7 @@ PS D:\Projects>
 Y al crear el siguiente contenedor le decimos que los datos los guarde en el volumen, esta imagen de MySQL es de docker.io/library/mysql
 
 ```pwsh
-PS D:\Projects> podman run -d -v mysqldata:/var/lib/mysql mysql:latest
+PS D:\Projects> podman run -d --pod thirsty_babbage -v mysqldata:/var/lib/mysql mysql:latest
 ```
 
 Parámetros:
@@ -467,6 +494,18 @@ Además tendremos que usar Hyper-V que es el hipervisor que mejor funciona con K
 ```pwsh
 Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All
 ```
+
+Cuando queramos usar minikube con un comando ejecutamos
+
+```pwsh
+PS D:\Projects> minikube start --driver=hyperv 
+```
+
+Parámetros
+
+- --driver=hipervisor Con este parámetro lo que haremos será indicarle el hipervisor que queramos para crear el cluster
+
+Lo que hará será crearnos un entorno local con una MV que crerará un cluster de Kubernetes
 
 # 7. Referencias bibliográficas
 
