@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, request
 import re
 import mysql.connector
@@ -6,10 +7,10 @@ from mysql.connector import Error
 app = Flask(__name__)
 
 db_config = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': 'contra',
-    'database': 'usuarios'
+    'host': os.getenv('DB_HOST', 'flaskapp-db.cpcaucqsa332.eu-west-2.rds.amazonaws.com'),
+    'user': os.getenv('DB_USER', 'root'),
+    'password': os.getenv('DB_PASSWORD', 'contrasenaseg'),
+    'database': os.getenv('DB_NAME', 'usuarios')
 }
 
 def validate_form(email, username, password, phone):

@@ -1,40 +1,42 @@
-# Save the output of this file and use kubectl create -f to import
-# it into Kubernetes.
-#
-# Created with podman-5.4.1
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  annotations:
-    io.kubernetes.cri-o.SandboxID/jovialhawking: 93258c27af2ed94988a393754c3123bf2ff8cd34a70913c82e2b719d8d6cabb6
-    io.kubernetes.cri-o.SandboxID/nostalgicyonath: 93258c27af2ed94988a393754c3123bf2ff8cd34a70913c82e2b719d8d6cabb6
-  creationTimestamp: "2025-04-03T13:50:36Z"
-  labels:
-    app: thirstybabbage
-  name: thirstybabbage
+  name: flaskapp-deployment
 spec:
-  containers:
-  - args:
-    - app.py
-    image: localhost/flask_app:latest
-    name: nostalgicyonath
-    ports:
-    - containerPort: 8080
-      hostPort: 8080
-  - args:
-    - mysqld
-    env:
-    - name: MYSQL_ROOT_PASSWORD
-      value: contra
-    image: docker.io/library/mysql:latest
-    name: jovialhawking
-    securityContext:
-      privileged: true
-      procMount: Unmasked
-    volumeMounts:
-    - mountPath: /var/lib/mysql
-      name: mysqldata-pvc
-  volumes:
-  - name: mysqldata-pvc
-    persistentVolumeClaim:
-      claimName: mysqldata
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flaskapp
+  template:
+    metadata:
+      labels:
+        app: flaskapp
+    spec:
+      containers:
+        - name: flask
+          image: 362107691285.dkr.ecr.eu-west-2.amazonaws.com/flask_app:latest
+          args: ["app.py"]
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_HOST
+              value: "flaskapp-db.cpcaucqsa332.eu-west-2.rds.amazonaws.com"
+            - name: DB_USER
+              value: "root"
+            - name: DB_PASSWORD
+              value: "contrasenaseg"
+            - name: DB_NAME
+              value: "usuarios"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flaskapp-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: flaskapp
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
