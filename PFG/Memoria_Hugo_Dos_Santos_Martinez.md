@@ -72,7 +72,7 @@ Los contenedores de podman pueden ser arrancados con o sin privilegios además d
 
 Te permite crear, arrancar y mantener los contenedores y sus imágenes en un entorno de producción
 
-**¿Que es un contendor?**
+**¿Qué es un contendor?**
 
 Es una unidad ligera, portable y auto-suficiente que une una aplicación con sus dependencias, librerías y entorno de ejecución para asegurarnos que la aplicación se ejecuta correctamente a lo largo de diferentes entornos
 
@@ -92,13 +92,17 @@ La de la aplicación web será creada con un Dockerfile personalizado a partir d
 
 La base de datos será una imagen de MySQL por defecto
 
-**¿Que es una pod o cápsula?**
+**¿Qué es una pod o cápsula?**
 
 La pod es un grupo de uno o mas contenedores que comparten recursos y pueden comunicarse entre sí a través de Localhost, agrupand los contenedores en un namespace de Linux que comparten recursos específicos permitiéndome fusionar variedad de aplicaciones y son gestionadas a través de la CLI
 
-**¿Que es un Dockerfile o Containerfile?**
+**¿Qué es un Dockerfile o Containerfile?**
 
 Es un archivo que sirve como una plantilla con una serie de instrucciones que se ejecutan de manera consecutiva para crear una imagen con la cual luego podremos construir un contenedor
+
+**¿Qué es Kubernetes?**
+
+Es un software de orquestación de contenedores
 
 Con las 3 aplicaciones ya instaladas empezaremos a desarrollar
 
@@ -435,6 +439,35 @@ PS D:\Projects> podman generate kube -f flaskapp_bbdd.yaml thirsty_babbage
 PS D:\Projects>
 ```
 
+Este archivo sirve como plantilla a la hora de querer levantar la pod y sus contenedores y que estén completamente funcionales con el comando **podman play kube {archivo}**
+
+```pwsh
+PS D:\Projects> podman pod ps
+b3474e41f547  thirsty_babbage  Running     4 days ago  93258c27af2e  3
+PS D:\Projects> podman pod rm -f b34
+PS D:\Projects> podman ps -a
+CONTAINER ID  IMAGE       COMMAND     CREATED     STATUS      PORTS       NAMES
+PS D:\Projects> podman play kube .\PFG\flaskapp_bbdd.yaml
+Pod:
+b590b3160c4a3d058fc709dab1a62d900140992aa861b8c881aa7c2ffb997a31
+Containers:
+c4a449f42c65e16146bc5c50dc01166999164914059dd856f0ebe97abb9dbdc5
+ff8545c877aa331353075791f902300d76ff72a93f54f81d1adb0d343b4b0d82
+
+PS D:\Projects> podman pod ps
+POD ID        NAME            STATUS      CREATED        INFRA ID      # OF CONTAINERS
+b590b3160c4a  thirstybabbage  Running     6 seconds ago  79d8b984af3e  3
+PS D:\Projects> podman ps -a
+CONTAINER ID  IMAGE                                    COMMAND     CREATED        STATUS        PORTS                                        NAMES
+79d8b984af3e  localhost/podman-pause:5.4.1-1741651200              8 seconds ago  Up 8 seconds  0.0.0.0:8080->8080/tcp                       b590b3160c4a-infra
+c4a449f42c65  localhost/flask_app:latest               app.py      8 seconds ago  Up 8 seconds  0.0.0.0:8080->8080/tcp                       thirstybabbage-nostalgicyonath
+ff8545c877aa  docker.io/library/mysql:latest           mysqld      7 seconds ago  Up 8 seconds  0.0.0.0:8080->8080/tcp, 3306/tcp, 33060/tcp  thirstybabbage-jovialhawking
+PS D:\Projects>
+```
+
+Como podrás ver he borrado la pod y por lo tanto se han borrado sus contenedores y al usar el comando anteriormente mencionado he podido volver a crear la misma estructura funcional que tenía antes
+
+
 # 5. Conclusiones finales
 
 ## 5.1 Cumplimiento de los requisitos fijados
@@ -505,7 +538,7 @@ Parámetros
 
 - --driver=hipervisor Con este parámetro lo que haremos será indicarle el hipervisor que queramos para crear el cluster
 
-Lo que hará será crearnos un entorno local con una MV que crerará un cluster de Kubernetes
+Lo que hará será crearnos un entorno local con una MV que crerará un cluster de Kubernetes con un solo nodo
 
 # 7. Referencias bibliográficas
 

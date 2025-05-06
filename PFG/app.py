@@ -5,15 +5,13 @@ from mysql.connector import Error
 
 app = Flask(__name__)
 
-# Datos de configuración de la base de datos
 db_config = {
-    'host': 'localhost',  # Nombre del contenedor o servicio de MySQL en el pod
-    'user': 'root',            # Usuario de MySQL
-    'password': 'contra',            # Contraseña vacía para root
-    'database': 'usuarios'     # Nombre de la base de datos
+    'host': 'localhost',
+    'user': 'root',
+    'password': 'contra',
+    'database': 'usuarios'
 }
 
-# Función para validar los datos del formulario
 def validate_form(email, username, password, phone):
     email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
     phone_regex = r'^\d{10}$'
@@ -27,18 +25,14 @@ def validate_form(email, username, password, phone):
         return "El número de teléfono debe tener 10 dígitos."
     return None
 
-# Función para insertar los datos del formulario en la base de datos
 def insert_user(email, username, password, phone):
     try:
-        # Conectar a la base de datos
         connection = mysql.connector.connect(**db_config)
         
         if connection.is_connected():
             cursor = connection.cursor()
-            # Consulta SQL para insertar el nuevo usuario
             insert_query = """INSERT INTO usuarios (email, usuario, pwd, phone)
                               VALUES (%s, %s, %s, %s)"""
-            # Ejecutar la consulta con los datos proporcionados
             cursor.execute(insert_query, (email, username, password, phone))
             connection.commit()
             cursor.close()
